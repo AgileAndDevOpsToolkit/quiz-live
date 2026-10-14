@@ -13,6 +13,7 @@ COPY docker/apache.conf /etc/apache2/conf-available/quizlive.conf
 RUN a2enconf quizlive
 WORKDIR /var/www/html
 COPY . .
+RUN chmod +x /var/www/html/docker/start.sh
 
 ENTRYPOINT ["/var/www/html/docker/start.sh"]
 CMD ["apache2-foreground"]
