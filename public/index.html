@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10182d">
+  <meta name="referrer" content="no-referrer">
+  <title>QuizLive — Quiz collaboratif</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <!-- Versions fixes. Pour un usage hors Internet, voir la section CDN du README. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/vue@3.5.18/dist/vue.global.prod.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+<div id="app" v-cloak>
+  <header class="site-header">
+    <div class="container header-inner">
+      <button type="button" class="brand" @click="goHome" aria-label="Retour à l'accueil">
+        <span class="brand-icon">⚡</span><span>Quiz<span class="brand-accent">Live</span></span>
+      </button>
+      <div class="header-right">
+        <span v-if="mode !== 'home'" class="session-pill">{{ code }}</span>
+        <span v-if="mode !== 'home'" class="connection-status" :class="{disconnected: !online}" :title="online ? 'Synchronisé' : 'Connexion interrompue, nouvelle tentative en cours'">
+          <span class="status-dot"></span>{{ online ? 'En direct' : 'Reconnexion…' }}
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <div v-if="error" class="alert alert-error" role="alert">
+      <span>{{ error }}</span><button type="button" @click="error = ''" aria-label="Fermer">×</button>
+    </div>
+    <div v-if="notice" class="alert alert-success" role="status">{{ notice }}</div>
+
+    <!-- ACCUEIL -->
+    <section v-if="mode === 'home'" class="welcome-layout">
+      <div class="welcome-intro">
+        <div class="eyebrow">L'atelier prend vie</div>
+        <h1>Un quiz en direct.<br><span class="gradient-text">Tout le monde joue.</span></h1>
+        <p>Affiche le QR code, fais participer ton groupe depuis les smartphones et termine sur un podium. Pas de compte, pas d'application à installer.</p>
+        <div class="feature-list">
+          <span>📱 100 % navigateur</span><span>⏱️ Chrono &amp; points</span><span>🏆 Podium final</span>
+        </div>
+      </div>
+      <div class="welcome-panels">
+        <section class="panel">
+          <div class="panel-heading"><span class="circle-icon violet">🎤</span><h2>Animer un quiz</h2></div>
+          <p class="subtle">Lance une nouvelle session avec le quiz configuré sur ce serveur.</p>
+          <div v-if="quizInfo" class="quiz-preview"><strong>{{ quizInfo.title }}</strong><span>{{ quizInfo.questionCount }} questions</span></div>
+          <form @submit.prevent="createSession" class="form-stack">
+            <label for="admin-key">Clé d'administration</label>
+            <input id="admin-key" v-model="adminKey" type="password" autocomplete="off" placeholder="Clé configurée sur le serveur" required minlength="16">
+            <button type="submit" class="btn btn-primary" :disabled="busy">{{ busy ? 'Création…' : 'Créer une session →' }}</button>
+          </form>
+        </section>
+        <section class="panel compact-panel">
+          <div class="panel-heading"><span class="circle-icon mint">🎮</span><h2>Rejoindre un quiz</h2></div>
+          <form @submit.prevent="openJoin" class="join-code-form">
+            <input v-model="manualCode" aria-label="Code à six caractères" maxlength="6" autocomplete="off" placeholder="CODE À 6 CARACTÈRES" class="code-input">
+            <button type="submit" class="btn btn-secondary">Rejoindre →</button>
+          </form>
+        </section>
+      </div>
+    </section>
+
+    <!-- FORMULAIRE PARTICIPANT -->
+    <section v-else-if="mode === 'player' && !session" class="center-stage">
+      <div class="panel join-panel">
+        <div class="big-emoji">🎮</div>
+        <div class="eyebrow">Session {{ code }}</div>
+        <h1>Prêt à jouer ?</h1>
+        <p class="subtle">Entre ton pseudo pour rejoindre le quiz. Il sera conservé sur cet appareil.</p>
+        <form @submit.prevent="joinSession" class="form-stack">
+          <label for="player-name">Ton pseudo</label>
+          <input id="player-name" v-model="playerName" maxlength="24" autocomplete="nickname" placeholder="Ex. Camille" required autofocus>
+          <button type="submit" class="btn btn-primary" :disabled="busy">{{ busy ? 'Connexion…' : 'Rejoindre le quiz →' }}</button>
+        </form>
+        <p class="small-note">Une participation par pseudo et par session.</p>
+      </div>
+    </section>
+
+    <!-- HÔTE SANS TOKEN LOCAL -->
+    <section v-else-if="mode === 'host' && !session && !hostToken" class="center-stage">
+      <div class="panel join-panel"><div class="big-emoji">🔒</div><h1>Accès animateur indisponible</h1>
+        <p>Le code seul ne donne pas accès aux commandes. Retrouve l'onglet où tu as créé la session ou crée-en une nouvelle.</p>
+        <button type="button" class="btn btn-primary" @click="goHome">Retour à l'accueil</button>
+      </div>
+    </section>
+    <section v-else-if="!session" class="center-stage"><div class="loading-indicator" role="status">Chargement de la session…</div></section>
+
+    <!-- ÉCRAN ANIMATEUR -->
+    <template v-else-if="mode === 'host'">
+      <div class="stage-heading">
+        <div><div class="eyebrow">Espace animateur</div><h1>{{ session.title }}</h1></div>
+        <div class="head-metrics"><span>👥 <b>{{ session.participantsCount }}</b> joueurs</span><span>🧩 <b>{{ session.questionCount }}</b> questions</span></div>
+      </div>
+
+      <section v-if="session.status === 'lobby'" class="host-lobby">
+        <div class="panel qr-panel">
+          <div class="eyebrow">Scanner pour rejoindre</div>
+          <div id="qr-code" class="qr-code" aria-label="QR code pour rejoindre le quiz"></div>
+          <div class="code-display">{{ code }}</div>
+          <p v-if="isLocalHost" class="local-warning">⚠️ Tu utilises localhost. Ouvre le site via son IP réseau ou son domaine pour obtenir un QR code accessible sur les smartphones.</p>
+          <p class="subtle">Ou ouvrir ce lien depuis un smartphone</p>
+          <div class="share-url">{{ joinUrl }}</div>
+          <button class="btn btn-secondary" type="button" @click="copyJoinLink">📋 Copier le lien</button>
+        </div>
+        <div class="panel waiting-panel">
+          <span class="mini-kicker">Salle d'attente</span><h2>On attend les joueurs !</h2>
+          <p class="subtle">Les pseudos apparaissent à mesure des connexions. Une fois que tout le monde est là, démarre la partie.</p>
+          <div class="player-count"><strong>{{ session.participantsCount }}</strong><span>participants connectés</span></div>
+          <div v-if="participants.length" class="name-cloud"><span v-for="name in participants" :key="name" class="name-chip">{{ name }}</span></div>
+          <div v-else class="empty-message">Les premiers joueurs apparaîtront ici…</div>
+          <button type="button" class="btn btn-primary btn-big" :disabled="busy || session.participantsCount < 1" @click="hostCommand('start')">🚀 Démarrer le quiz</button>
+          <p class="small-note">Les inscriptions ferment au démarrage. Le chrono commence immédiatement.</p>
+        </div>
+      </section>
+
+      <section v-else-if="session.status === 'question' || session.status === 'reveal'" class="host-game">
+        <div class="progress-header"><span class="eyebrow">Question {{ session.questionIndex + 1 }} / {{ session.questionCount }}</span><span>{{ session.answeredCount }} / {{ session.participantsCount }} réponses</span></div>
+        <div class="timer-track"><div :style="{ width: progressPercent + '%' }" :class="['timer-fill', {urgent: remainingMs < 5000}]"></div></div>
+        <div class="question-panel panel">
+          <div class="question-top"><span class="question-tag">QCM • {{ question.durationSeconds }} secondes</span>
+            <span v-if="session.status === 'question'" :class="['countdown', {urgent: remainingMs < 5000}]">{{ secondsLeft }}<small>s</small></span>
+            <span v-else class="revealed-tag">✓ Réponse révélée</span>
+          </div>
+          <h2 class="question-title">{{ question.text }}</h2>
+          <div class="answer-grid host-answer-grid">
+            <div v-for="(answer, i) in question.answers" :key="i" :class="['answer-tile', 'tile-' + i, {correct: session.status === 'reveal' && reveal.correctIndex === i, muted: session.status === 'reveal' && reveal.correctIndex !== i}]">
+              <span class="answer-shape">{{ shapes[i] }}</span><span class="answer-text">{{ answer }}</span>
+              <span v-if="session.status === 'reveal'" class="vote-count">{{ reveal.answerCounts[i] }} votes</span>
+            </div>
+          </div>
+          <p v-if="session.status === 'reveal' && reveal.explanation" class="explanation">💡 {{ reveal.explanation }}</p>
+        </div>
+        <div class="host-controls panel">
+          <div><strong>{{ session.status === 'question' ? (remainingMs > 0 ? 'Le quiz est en cours' : 'Temps écoulé') : 'Résultats de cette question' }}</strong>
+            <p class="subtle">{{ session.status === 'question' ? 'Révèle la bonne réponse lorsque tu le souhaites.' : 'Les résultats sont visibles sur tous les appareils.' }}</p>
+          </div>
+          <button v-if="session.status === 'question'" class="btn btn-primary" type="button" :disabled="busy" @click="hostCommand('reveal')">👁️ Révéler la réponse</button>
+          <button v-else class="btn btn-primary" type="button" :disabled="busy" @click="hostCommand('next')">{{ session.questionIndex + 1 === session.questionCount ? '🏁 Afficher le podium' : 'Question suivante →' }}</button>
+        </div>
+        <div v-if="session.status === 'reveal' && leaderboard.length" class="panel standings-preview"><h3>Classement provisoire</h3><div v-for="p in leaderboard.slice(0,5)" :key="p.id" class="standings-row"><span class="rank">#{{ p.rank }}</span><strong>{{ p.name }}</strong><span>{{ p.score }} pts</span></div></div>
+        <div class="danger-action"><button type="button" class="text-button" @click="confirmFinish">Terminer le quiz maintenant</button></div>
+      </section>
+
+      <section v-else-if="session.status === 'finished'"><div class="finish-intro"><span class="big-emoji">🏆</span><div class="eyebrow">Partie terminée</div><h2>Bravo à tous les joueurs !</h2></div>
+        <div class="podium" v-if="leaderboard.length"><div v-for="p in podiumOrder" :key="p.id" :class="['podium-card', 'place-' + p.rank]"><div class="medal">{{ medals[p.rank-1] }}</div><div class="podium-name">{{ p.name }}</div><strong>{{ p.score }} pts</strong><span>{{ p.correctAnswers }} bonnes réponses</span></div></div>
+        <div class="panel final-board"><h3>Classement complet</h3><div v-for="p in leaderboard" :key="p.id" class="standings-row"><span class="rank">#{{ p.rank }}</span><strong>{{ p.name }}</strong><span>{{ p.score }} pts</span></div></div>
+        <div class="end-actions"><button type="button" class="btn btn-primary" @click="goHome">Créer une autre session →</button></div>
+      </section>
+    </template>
+
+    <!-- ÉCRAN PARTICIPANT -->
+    <template v-else-if="mode === 'player'">
+      <div class="player-header"><span>Salut, <strong>{{ me.name }}</strong> 👋</span><span class="score-pill">⭐ {{ me.score }} pts</span></div>
+      <section v-if="session.status === 'lobby'" class="center-stage player-wait"><div class="panel waiting-player-panel"><div class="big-emoji bounce">🎉</div><div class="eyebrow">Tu es dans la partie</div><h1>C'est parti bientôt !</h1><p>L'animateur démarre le quiz dans un instant.</p><p class="subtle">{{ session.participantsCount }} joueur{{ session.participantsCount > 1 ? 's' : '' }} dans la salle</p><div class="waiting-dots"><i></i><i></i><i></i></div></div></section>
+
+      <section v-else-if="session.status === 'question' || session.status === 'reveal'" class="participant-game">
+        <div class="progress-header"><span class="eyebrow">Question {{ session.questionIndex + 1 }} / {{ session.questionCount }}</span><span v-if="session.status === 'question'" :class="['countdown', {urgent: remainingMs < 5000}]">{{ secondsLeft }}<small>s</small></span><span v-else class="revealed-tag">Réponse dévoilée</span></div>
+        <div class="timer-track"><div :style="{width: progressPercent + '%'}" :class="['timer-fill', {urgent: remainingMs < 5000}]"></div></div>
+        <h2 class="player-question-title">{{ question.text }}</h2>
+        <div class="answer-grid participant-answer-grid">
+          <button v-for="(answer, i) in question.answers" :key="i" type="button" @click="submitAnswer(i)"
+            :disabled="busy || me.hasAnswered || session.status === 'reveal' || remainingMs <= 0"
+            :class="['answer-tile', 'tile-'+i, {selected: me.answerIndex === i, correct: session.status === 'reveal' && reveal.correctIndex === i, muted: session.status === 'reveal' && reveal.correctIndex !== i, locked: me.hasAnswered || remainingMs <= 0}]">
+            <span class="answer-shape">{{ shapes[i] }}</span><span class="answer-text">{{ answer }}</span>
+            <span v-if="session.status === 'reveal' && reveal.correctIndex === i" class="answer-mark">✓</span>
+          </button>
+        </div>
+        <div v-if="session.status === 'question'" class="response-message">
+          <span v-if="me.hasAnswered">✅ Réponse enregistrée. En attente des autres joueurs…</span>
+          <span v-else-if="remainingMs <= 0">⌛ Temps écoulé. Attends la correction.</span>
+          <span v-else>Choisis une réponse avant la fin du chrono !</span>
+        </div>
+        <div v-else class="result-feedback panel">
+          <div v-if="me.hasAnswered"><div class="big-emoji">{{ me.isCorrect ? '🎯' : '💪' }}</div><h3>{{ me.isCorrect ? 'Bonne réponse !' : 'Pas cette fois !' }}</h3><p v-if="me.isCorrect" class="earned-points">+{{ me.earnedPoints }} points</p><p v-else class="subtle">La prochaine sera la bonne !</p></div>
+          <div v-else><div class="big-emoji">⏳</div><h3>Pas de réponse enregistrée</h3><p class="subtle">Prêt pour la prochaine ?</p></div>
+          <p v-if="reveal.explanation" class="explanation">💡 {{ reveal.explanation }}</p>
+          <p class="small-note">En attente de la question suivante…</p>
+        </div>
+      </section>
+
+      <section v-else-if="session.status === 'finished'"><div class="finish-intro"><span class="big-emoji">🏆</span><div class="eyebrow">Quiz terminé</div><h1>Bien joué, {{ me.name }} !</h1><p>Tu termines <strong>#{{ me.rank }}</strong> avec <strong>{{ me.score }} points</strong>.</p></div>
+        <div class="podium" v-if="leaderboard.length"><div v-for="p in podiumOrder" :key="p.id" :class="['podium-card', 'place-' + p.rank]"><div class="medal">{{ medals[p.rank-1] }}</div><div class="podium-name">{{ p.name }}</div><strong>{{ p.score }} pts</strong></div></div>
+        <div class="panel final-board"><h3>Classement final</h3><div v-for="p in leaderboard" :key="p.id" class="standings-row" :class="{'highlight-me':p.name === me.name}"><span class="rank">#{{ p.rank }}</span><strong>{{ p.name }}</strong><span>{{ p.score }} pts</span></div></div>
+      </section>
+    </template>
+  </main>
+  <footer class="site-footer container">QuizLive · PHP + Vue 3 + SQLite · Synchronisation automatique</footer>
+</div>
+<noscript>Active JavaScript pour participer au quiz.</noscript>
+</body>
+</html>

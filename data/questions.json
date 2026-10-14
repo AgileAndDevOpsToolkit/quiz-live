@@ -1,0 +1,86 @@
+{
+  "title": "Quiz Agile & DevOps",
+  "description": "Un quiz de démonstration pour découvrir le fonctionnement de QuizLive.",
+  "questions": [
+    {
+      "id": "agile-01",
+      "text": "Dans Scrum, qui est responsable de maximiser la valeur du produit ?",
+      "answers": ["Le Scrum Master", "Le Product Owner", "Les parties prenantes", "Le directeur de projet"],
+      "correctIndex": 1,
+      "durationSeconds": 20,
+      "explanation": "Le Product Owner est responsable de maximiser la valeur du produit résultant du travail de la Scrum Team."
+    },
+    {
+      "id": "agile-02",
+      "text": "Quelle est la durée maximale d'un Sprint dans Scrum ?",
+      "answers": ["Une semaine", "Deux semaines", "Un mois", "Trois mois"],
+      "correctIndex": 2,
+      "durationSeconds": 20,
+      "explanation": "Un Sprint dure au maximum un mois : il peut être plus court."
+    },
+    {
+      "id": "agile-03",
+      "text": "Quel événement Scrum permet d'inspecter le résultat du Sprint avec les parties prenantes ?",
+      "answers": ["Sprint Review", "Daily Scrum", "Sprint Planning", "Sprint Retrospective"],
+      "correctIndex": 0,
+      "durationSeconds": 20,
+      "explanation": "La Sprint Review porte sur le résultat du Sprint et les adaptations futures du Product Backlog."
+    },
+    {
+      "id": "devops-01",
+      "text": "Que signifie CI dans CI/CD ?",
+      "answers": ["Code Inspection", "Continuous Integration", "Cloud Infrastructure", "Customer Interaction"],
+      "correctIndex": 1,
+      "durationSeconds": 15,
+      "explanation": "CI signifie Continuous Integration, ou intégration continue."
+    },
+    {
+      "id": "devops-02",
+      "text": "Quel outil est principalement utilisé pour construire et exécuter des conteneurs ?",
+      "answers": ["Git", "Jira", "Docker", "JUnit"],
+      "correctIndex": 2,
+      "durationSeconds": 15,
+      "explanation": "Docker sert à créer, distribuer et exécuter des conteneurs."
+    },
+    {
+      "id": "tech-01",
+      "text": "Quel code HTTP désigne généralement une ressource introuvable ?",
+      "answers": ["200", "301", "404", "500"],
+      "correctIndex": 2,
+      "durationSeconds": 15,
+      "explanation": "404 signifie Not Found : la ressource demandée n'a pas été trouvée."
+    },
+    {
+      "id": "agile-04",
+      "text": "À quoi sert principalement une rétrospective de Sprint ?",
+      "answers": ["Estimer tout le Product Backlog", "Évaluer chaque développeur", "Approuver le budget", "Améliorer la qualité et l'efficacité"],
+      "correctIndex": 3,
+      "durationSeconds": 20,
+      "explanation": "La rétrospective sert à planifier des améliorations de la qualité et de l'efficacité de l'équipe."
+    },
+    {
+      "id": "tech-02",
+      "text": "Quelle base de données est embarquée et stockée dans un fichier unique ?",
+      "answers": ["SQLite", "PostgreSQL", "MongoDB Cluster", "Redis Cluster"],
+      "correctIndex": 0,
+      "durationSeconds": 15,
+      "explanation": "SQLite est une base embarquée, transactionnelle, sans serveur de base de données séparé."
+    },
+    {
+      "id": "agile-05",
+      "text": "Que représente la vélocité d'une équipe qui utilise les Story Points ?",
+      "answers": ["Le nombre d'heures travaillées", "La somme des points terminés sur une période", "Le nombre de bugs trouvés", "La rapidité individuelle des développeurs"],
+      "correctIndex": 1,
+      "durationSeconds": 20,
+      "explanation": "La vélocité mesure généralement le volume de travail terminé, estimé en points, sur un Sprint."
+    },
+    {
+      "id": "devops-03",
+      "text": "Que permet principalement un pipeline de déploiement automatisé ?",
+      "answers": ["Supprimer tous les tests", "Remplacer le Product Owner", "Fiabiliser les livraisons répétées", "Éviter toute revue de code"],
+      "correctIndex": 2,
+      "durationSeconds": 20,
+      "explanation": "L'automatisation rend les étapes répétables et diminue les erreurs manuelles, sans dispenser des validations adaptées."
+    }
+  ]
+}

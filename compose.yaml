@@ -1,0 +1,14 @@
+services:
+  quizlive:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      APP_ADMIN_KEY: ${APP_ADMIN_KEY:?Configurer APP_ADMIN_KEY dans .env}
+      QUIZ_DB_PATH: /var/www/storage/quiz.sqlite
+    volumes:
+      - quizlive_data:/var/www/storage
+
+volumes:
+  quizlive_data:
