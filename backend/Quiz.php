@@ -7,15 +7,11 @@ use JsonException;
 
 final class Quiz
 {
-    public static function filePath(): string
-    {
-        return getenv('QUIZ_JSON_PATH') ?: dirname(__DIR__) . '/data/questions.json';
-    }
+    public const MAX_BYTES = 1024 * 1024;
 
-    public static function fromFile(): array
+    public static function load(string $path): array
     {
-        $path = self::filePath();
-        if (!is_file($path) || filesize($path) > 1024 * 1024) {
+        if (!is_file($path) || filesize($path) > self::MAX_BYTES) {
             throw new ApiError('Fichier de questions absent ou trop volumineux.', 503);
         }
         $raw = file_get_contents($path);
@@ -32,6 +28,11 @@ final class Quiz
         } catch (JsonException $exception) {
             throw new ApiError('Le fichier de questions n’est pas un JSON valide : ' . $exception->getMessage(), 503);
         }
+        return self::validate($data);
+    }
+
+    public static function validate(mixed $data): array
+    {
         if (!is_array($data) || !is_string($data['title'] ?? null)
             || trim($data['title']) === '' || !is_array($data['questions'] ?? null)
             || !array_is_list($data['questions']) || count($data['questions']) < 1

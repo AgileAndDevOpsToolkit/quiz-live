@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 use QuizLive\ApiError;
 use QuizLive\Database;
+use QuizLive\Quiz;
+use QuizLive\QuizRepository;
 use QuizLive\QuizService;
 
 require dirname(__DIR__) . '/backend/bootstrap.php';
@@ -20,17 +22,17 @@ function reply(array $payload, int $status = 200): never
     exit;
 }
 
-function body(): array
+function body(int $limit = 8192): array
 {
     $size = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
-    if ($size > 8192) {
+    if ($size > $limit) {
         throw new ApiError('Requête trop volumineuse.', 413);
     }
     if (!str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')) {
         throw new ApiError('Le corps de la requête doit être un JSON.', 415);
     }
-    $raw = file_get_contents('php://input', false, null, 0, 8193);
-    if ($raw === false || strlen($raw) > 8192) {
+    $raw = file_get_contents('php://input', false, null, 0, $limit + 1);
+    if ($raw === false || strlen($raw) > $limit) {
         throw new ApiError('Requête trop volumineuse.', 413);
     }
     try {
@@ -76,8 +78,8 @@ try {
         reply(['ok' => true]);
     }
     $service = new QuizService(Database::connect());
-    if ($method === 'GET' && $action === 'info') {
-        reply($service->publicInfo());
+    if ($method === 'GET' && $action === 'quizzes') {
+        reply(['quizzes' => $service->listQuizzes(token())]);
     }
     if ($method === 'GET' && $action === 'state') {
         reply($service->state(field($_GET, 'code'), token()));
@@ -85,10 +87,24 @@ try {
     if ($method !== 'POST') {
         throw new ApiError('Route ou méthode inconnue.', 404);
     }
-    $data = body();
+    // Seul l'envoi d'un questionnaire peut dépasser la limite standard des requêtes.
+    $data = body($action === 'quiz-upload' ? Quiz::MAX_BYTES + 4096 : 8192);
     switch ($action) {
         case 'create':
-            reply($service->create(token()), 201);
+            $quizId = $data['quizId'] ?? QuizRepository::DEFAULT_ID;
+            if (!is_string($quizId)) {
+                throw new ApiError('Champ quizId invalide.');
+            }
+            reply($service->create(token(), $quizId), 201);
+        case 'quiz-upload':
+            $id = $data['id'] ?? null;
+            if ($id !== null && !is_string($id)) {
+                throw new ApiError('Champ id invalide.');
+            }
+            reply($service->uploadQuiz(token(), $id, $data['quiz'] ?? null, ($data['overwrite'] ?? false) === true), 201);
+        case 'quiz-delete':
+            $service->deleteQuiz(token(), field($data, 'id'));
+            reply(['ok' => true]);
         case 'join':
             reply($service->join(field($data, 'code'), field($data, 'name')), 201);
         case 'answer':

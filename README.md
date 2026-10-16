@@ -45,7 +45,7 @@ php bin/init-db.php
 php -S 0.0.0.0:8080 -t public
 ```
 
-Le dossier `storage/` doit être accessible en écriture par PHP/Apache. Avec Apache, passe la variable `APP_ADMIN_KEY` à l'environnement du processus serveur (configuration de service ou du VirtualHost), **pas** dans un fichier servi par le site. Le JSON des questions et le fichier SQLite restent **en dehors** du `DocumentRoot`.
+Le dossier `storage/` doit être accessible en écriture par PHP/Apache. Avec Apache, passe la variable `APP_ADMIN_KEY` à l'environnement du processus serveur (configuration de service ou du VirtualHost), **pas** dans un fichier servi par le site. Les questionnaires JSON et le fichier SQLite restent **en dehors** du `DocumentRoot`.
 
 Variables d'environnement disponibles :
 
@@ -53,7 +53,8 @@ Variables d'environnement disponibles :
 |---|---|---|
 | `APP_ADMIN_KEY` | Clé secrète de création (16 caractères minimum) | Obligatoire |
 | `QUIZ_DB_PATH` | Chemin du fichier SQLite persistant | `storage/quiz.sqlite` |
-| `QUIZ_JSON_PATH` | Chemin vers le JSON du quiz | `data/questions.json` |
+| `QUIZ_DIR` | Dossier des questionnaires (un fichier `<id>.json` chacun) | `storage/quizzes` |
+| `QUIZ_JSON_PATH` | JSON de démonstration copié dans `QUIZ_DIR` s'il est vide | `data/questions.json` |
 
 Sur Docker, l'initialisation SQLite est automatique au démarrage.
 
@@ -75,9 +76,15 @@ Exemple : 10 s restantes sur 20 s → **750 points**.
 
 Le chrono continue côté serveur même si un téléphone est ralenti. Un faible délai réseau peut affecter légèrement le score ; pour un jeu d'atelier, ce compromis est généralement acceptable.
 
-## 4. Changer les questions
+## 4. Gérer les questionnaires
 
-Édite `data/questions.json`. Le fichier contient le quiz ainsi que toutes ses questions (par défaut : 10 questions Agile & DevOps). Une nouvelle session prend **une copie figée** du JSON au moment de sa création : modifier le fichier n'altère donc pas les parties déjà lancées.
+Les questionnaires sont des fichiers JSON dans `QUIZ_DIR` (`/var/www/storage/quizzes` sous Docker, donc **dans le volume** : ils survivent aux mises à jour de l'image). Au premier démarrage, si le dossier est vide, `data/questions.json` y est copié sous le nom `default.json`.
+
+Depuis l'accueil, saisis la clé d'administration : tu peux alors **choisir le questionnaire** de la session, **importer** un fichier JSON (l'identifiant est dérivé du nom du fichier ; un questionnaire existant n'est remplacé qu'après confirmation) ou **supprimer** un questionnaire. Tu peux aussi déposer directement des fichiers `<id>.json` dans le dossier (`id` : minuscules, chiffres et `-`, 40 caractères max ; 50 questionnaires maximum).
+
+Une nouvelle session prend **une copie figée** du questionnaire choisi : ajouter, modifier ou supprimer un questionnaire n'altère donc pas les parties déjà lancées. Si tu supprimes tous les questionnaires, le quiz de démonstration est recopié au prochain démarrage.
+
+API (clé d'administration en `Authorization: Bearer`) : `GET api.php?action=quizzes`, `POST quiz-upload` (`{id?, quiz, overwrite?}`), `POST quiz-delete` (`{id}`), `POST create` (`{quizId}`).
 
 Exemple :
 
@@ -109,7 +116,7 @@ Exemple :
 - De 1 à 100 questions par quiz, fichier JSON de 1 Mo maximum.
 - `explanation` est facultatif : elle s'affiche uniquement à la correction.
 
-Après modification : `docker compose up -d --build` pour reconstruire l'image avec le nouveau fichier. En installation manuelle, la prochaine session utilisera directement le JSON modifié.
+Les modifications sont prises en compte à la prochaine session, sans reconstruire l'image.
 
 ## 5. Architecture et sécurité
 
@@ -124,9 +131,10 @@ quiz-live/
 ├── backend/
 │   ├── Database.php        ← SQLite, schéma et paramètres de connexion
 │   ├── Quiz.php            ← Validation du JSON
+│   ├── QuizRepository.php  ← Questionnaires stockés dans QUIZ_DIR
 │   └── QuizService.php     ← Sessions, autorisations, scoring, podium
-├── data/questions.json    ← Questions + bonnes réponses, hors Web
-├── storage/                ← DB SQLite, hors Web
+├── data/questions.json    ← Quiz de démonstration (copié dans le volume au 1er démarrage)
+├── storage/                ← DB SQLite et quizzes/, hors Web
 ├── bin/                    ← Initialisation et maintenance
 ├── tests/                  ← Tests métier
 ├── docker/                 ← Config Apache + entrée Docker

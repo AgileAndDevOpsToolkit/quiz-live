@@ -12,8 +12,11 @@ final class QuizService
     private const MAX_PARTICIPANTS = 120;
     private bool $writing = false;
 
-    public function __construct(private readonly PDO $db)
+    private readonly QuizRepository $quizzes;
+
+    public function __construct(private readonly PDO $db, ?QuizRepository $quizzes = null)
     {
+        $this->quizzes = $quizzes ?? new QuizRepository();
     }
 
     public static function nowMs(): int
@@ -21,23 +24,32 @@ final class QuizService
         return (int) floor(microtime(true) * 1000);
     }
 
-    public function publicInfo(): array
+    /** @return list<array{id:string,title:string,questionCount:int,updatedAt:int}> */
+    public function listQuizzes(string $adminKey): array
     {
-        $quiz = Quiz::fromFile();
-        return ['title' => $quiz['title'], 'questionCount' => count($quiz['questions'])];
+        $this->assertAdmin($adminKey);
+        return $this->quizzes->list();
     }
 
-    public function create(string $adminKey): array
+    public function uploadQuiz(string $adminKey, ?string $id, mixed $quiz, bool $overwrite): array
     {
-        $expected = getenv('APP_ADMIN_KEY');
-        if (!$expected || strlen($expected) < 16) {
-            throw new ApiError('Configure APP_ADMIN_KEY avec une clé d’au moins 16 caractères.', 503);
+        $this->assertAdmin($adminKey);
+        if ($id === null || $id === '') {
+            $id = QuizRepository::slugify(is_array($quiz) && is_string($quiz['title'] ?? null) ? $quiz['title'] : '');
         }
-        if (!hash_equals($expected, $adminKey)) {
-            throw new ApiError('Clé animateur incorrecte.', 403);
-        }
+        return $this->quizzes->save($id, $quiz, $overwrite);
+    }
 
-        $quiz = Quiz::fromFile();
+    public function deleteQuiz(string $adminKey, string $id): void
+    {
+        $this->assertAdmin($adminKey);
+        $this->quizzes->delete($id);
+    }
+
+    public function create(string $adminKey, string $quizId = QuizRepository::DEFAULT_ID): array
+    {
+        $this->assertAdmin($adminKey);
+        $quiz = $this->quizzes->get($quizId);
         $snapshot = json_encode($quiz, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $token = bin2hex(random_bytes(32));
         $now = self::nowMs();
@@ -340,6 +352,17 @@ final class QuizService
             throw new ApiError('Identifiant de participant inconnu.', 401);
         }
         return ['role' => 'player', 'participant' => $player];
+    }
+
+    private function assertAdmin(string $adminKey): void
+    {
+        $expected = getenv('APP_ADMIN_KEY');
+        if (!$expected || strlen($expected) < 16) {
+            throw new ApiError('Configure APP_ADMIN_KEY avec une clé d’au moins 16 caractères.', 503);
+        }
+        if (!hash_equals($expected, $adminKey)) {
+            throw new ApiError('Clé animateur incorrecte.', 403);
+        }
     }
 
     private function getSession(string $code, bool $throw = true): array|false

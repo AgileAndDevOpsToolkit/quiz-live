@@ -57,7 +57,8 @@
       const adminKey = ref('');
       const manualCode = ref('');
       const playerName = ref('');
-      const quizInfo = ref(null);
+      const quizzes = ref(null);
+      const selectedQuizId = ref('');
       const session = ref(null);
       const question = ref(null);
       const reveal = ref(null);
@@ -151,15 +152,66 @@
         }
         routeTo('player', candidate);
       }
-      async function createSession() {
+      async function loadQuizzes(preferredId) {
+        const { result } = await request('quizzes', { token: adminKey.value });
+        quizzes.value = result.quizzes;
+        const ids = result.quizzes.map((q) => q.id);
+        selectedQuizId.value = [preferredId, selectedQuizId.value, ids[0]].find((id) => id && ids.includes(id)) || '';
+      }
+      async function unlockAdmin() {
         if (busy.value) return;
         busy.value = true;
         error.value = '';
+        try { await loadQuizzes(); }
+        catch (exception) { showError(exception); }
+        finally { busy.value = false; }
+      }
+      function lockAdmin() {
+        adminKey.value = '';
+        quizzes.value = null;
+        selectedQuizId.value = '';
+      }
+      async function importQuiz(event) {
+        const input = event.target;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file || busy.value) return;
+        busy.value = true;
+        error.value = '';
         try {
-          const { result } = await request('create', { method: 'POST', token: adminKey.value, body: {} });
+          if (file.size > 1024 * 1024) throw new Error('Le fichier dépasse 1 Mo.');
+          let quiz;
+          try { quiz = JSON.parse(await file.text()); }
+          catch { throw new Error('Ce fichier n’est pas un JSON valide.'); }
+          const id = file.name.replace(/\.json$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || undefined;
+          const known = quizzes.value.some((q) => q.id === id);
+          if (known && !window.confirm(`Un questionnaire « ${id} » existe déjà. Le remplacer ?`)) return;
+          const { result } = await request('quiz-upload', { method: 'POST', token: adminKey.value, body: { id, quiz, overwrite: known } });
+          await loadQuizzes(result.id);
+          setNotice(`Questionnaire « ${result.title} » importé.`);
+        } catch (exception) { showError(exception); }
+        finally { busy.value = false; }
+      }
+      async function deleteQuiz() {
+        const target = quizzes.value.find((q) => q.id === selectedQuizId.value);
+        if (!target || busy.value || !window.confirm(`Supprimer « ${target.title} » ? Les sessions en cours ne sont pas affectées.`)) return;
+        busy.value = true;
+        error.value = '';
+        try {
+          await request('quiz-delete', { method: 'POST', token: adminKey.value, body: { id: target.id } });
+          await loadQuizzes();
+        } catch (exception) { showError(exception); }
+        finally { busy.value = false; }
+      }
+      async function createSession() {
+        if (busy.value || !selectedQuizId.value) return;
+        busy.value = true;
+        error.value = '';
+        try {
+          const { result } = await request('create', { method: 'POST', token: adminKey.value, body: { quizId: selectedQuizId.value } });
           hostToken.value = result.hostToken;
           store(`quiz_host_${result.code}`, hostToken.value);
-          adminKey.value = '';
+          lockAdmin();
           routeTo('host', result.code);
           // Si localStorage est désactivé, conserver le jeton en mémoire pour la session actuelle.
           hostToken.value = result.hostToken;
@@ -297,9 +349,6 @@
       watch([mode, code, () => session.value?.status], () => { void nextTick(renderQRCode); });
       onMounted(() => {
         void restoreFromUrl();
-        void request('info').then(({ result }) => { quizInfo.value = result; }).catch((exception) => {
-          if (mode.value === 'home') showError(exception);
-        });
         tickTimer = setInterval(() => { tick.value = Date.now(); }, 100);
         pollTimer = setInterval(() => { void refresh(); }, 1000);
         window.addEventListener('popstate', restoreFromUrl);
@@ -311,11 +360,11 @@
         window.removeEventListener('popstate', restoreFromUrl);
       });
       return {
-        mode, code, hostToken, adminKey, manualCode, playerName, quizInfo,
+        mode, code, hostToken, adminKey, manualCode, playerName, quizzes, selectedQuizId,
         session, question, reveal, me, participants, leaderboard,
         online, busy, error, notice, isLocalHost, joinUrl, remainingMs, secondsLeft, progressPercent,
         podiumOrder, shapes, medals, letters,
-        goHome, openJoin, createSession, joinSession, submitAnswer, hostCommand,
+        goHome, openJoin, unlockAdmin, lockAdmin, importQuiz, deleteQuiz, createSession, joinSession, submitAnswer, hostCommand,
         confirmFinish, copyJoinLink,
       };
     },

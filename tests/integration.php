@@ -4,6 +4,7 @@ declare(strict_types=1);
 use QuizLive\ApiError;
 use QuizLive\Database;
 use QuizLive\Quiz;
+use QuizLive\QuizRepository;
 use QuizLive\QuizService;
 
 require dirname(__DIR__) . '/backend/bootstrap.php';
@@ -26,16 +27,51 @@ if (!extension_loaded('pdo_sqlite')) {
 
 $file = tempnam(sys_get_temp_dir(), 'quizlive-test-');
 if ($file === false) throw new RuntimeException('tempnam impossible');
+$quizDir = $file . '-quizzes';
 try {
     putenv('QUIZ_DB_PATH=' . $file);
+    putenv('QUIZ_DIR=' . $quizDir);
     putenv('APP_ADMIN_KEY=sample-test-admin-key-over-16-chars');
     Database::initialize();
     $db = Database::connect();
     $service = new QuizService($db);
-    testAssert(count(Quiz::fromFile()['questions']) === 10, 'Validation du JSON de démonstration');
-    testAssert($service->publicInfo()['questionCount'] === 10, 'Informations publiques');
+    $adminKey = 'sample-test-admin-key-over-16-chars';
+    testAssert(count(Quiz::load(QuizRepository::seedPath())['questions']) === 10, 'Validation du JSON de démonstration');
+    testAssert(QuizRepository::seed() === true, 'Le quiz de démonstration est copié dans un dossier vide');
+    testAssert(QuizRepository::seed() === false, 'Le seeding ne touche pas un dossier non vide');
+    $quizzes = $service->listQuizzes($adminKey);
+    testAssert(count($quizzes) === 1 && $quizzes[0]['id'] === 'default' && $quizzes[0]['questionCount'] === 10, 'Liste des questionnaires');
+    testAssert(expectsError(fn() => $service->listQuizzes('bad-key'), 403), 'Liste réservée à l’animateur');
+
+    $custom = [
+        'title' => 'Quiz équipe été',
+        'questions' => [[
+            'id' => 'q1', 'text' => 'Question ?', 'answers' => ['a', 'b', 'c', 'd'],
+            'correctIndex' => 2, 'durationSeconds' => 10,
+        ]],
+    ];
+    $uploaded = $service->uploadQuiz($adminKey, null, $custom, false);
+    testAssert($uploaded['id'] === 'quiz-equipe-ete' && $uploaded['questionCount'] === 1, 'Upload avec identifiant dérivé du titre');
+    testAssert(expectsError(fn() => $service->uploadQuiz($adminKey, 'quiz-equipe-ete', $custom, false), 409), 'Écrasement refusé sans overwrite');
+    $custom['title'] = 'Quiz équipe été v2';
+    testAssert($service->uploadQuiz($adminKey, 'quiz-equipe-ete', $custom, true)['title'] === 'Quiz équipe été v2', 'Écrasement autorisé avec overwrite');
+    testAssert(expectsError(fn() => $service->uploadQuiz('bad-key', 'x', $custom, false), 403), 'Upload refusé sans clé admin');
+    testAssert(expectsError(fn() => $service->uploadQuiz($adminKey, 'x', ['title' => 'Vide', 'questions' => []], false), 422), 'Quiz invalide refusé');
+    foreach (['../evil', 'A/b', '.hidden', str_repeat('a', 41), 'a b'] as $badId) {
+        testAssert(expectsError(fn() => $service->uploadQuiz($adminKey, $badId, $custom, true), 422), 'Identifiant refusé : ' . $badId);
+    }
+    testAssert(glob($quizDir . '/*') !== false && count(glob($quizDir . '/*')) === 2, 'Aucun fichier hors identifiants valides ni résidu temporaire');
+    testAssert(expectsError(fn() => $service->create($adminKey, 'inconnu'), 404), 'Questionnaire inconnu refusé');
     testAssert(expectsError(fn() => $service->create('bad-key'), 403), 'La mauvaise clé est refusée');
-    $created = $service->create('sample-test-admin-key-over-16-chars');
+
+    $other = $service->create($adminKey, 'quiz-equipe-ete');
+    $otherState = $service->state($other['code'], $other['hostToken']);
+    testAssert($otherState['session']['questionCount'] === 1 && $otherState['session']['title'] === 'Quiz équipe été v2', 'Session créée avec le questionnaire choisi');
+    $service->deleteQuiz($adminKey, 'quiz-equipe-ete');
+    testAssert(expectsError(fn() => $service->deleteQuiz($adminKey, 'quiz-equipe-ete'), 404), 'Suppression d’un questionnaire absent');
+    testAssert($service->state($other['code'], $other['hostToken'])['role'] === 'host', 'Une session en cours survit à la suppression de son questionnaire');
+
+    $created = $service->create($adminKey);
     $code = $created['code'];
     $host = $created['hostToken'];
     testAssert(strlen($host) === 64, 'Jeton animateur robuste');
@@ -74,6 +110,8 @@ try {
     $db = null;
     echo "\nTous les tests d'intégration sont passés.\n";
 } finally {
+    foreach (glob($quizDir . '/{,.}*.json', GLOB_BRACE) ?: [] as $f) @unlink($f);
+    @rmdir($quizDir);
     @unlink($file);
     @unlink($file . '-wal');
     @unlink($file . '-shm');

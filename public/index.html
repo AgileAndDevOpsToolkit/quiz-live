@@ -47,12 +47,26 @@
       <div class="welcome-panels">
         <section class="panel">
           <div class="panel-heading"><span class="circle-icon violet">🎤</span><h2>Animer un quiz</h2></div>
-          <p class="subtle">Lance une nouvelle session avec le quiz configuré sur ce serveur.</p>
-          <div v-if="quizInfo" class="quiz-preview"><strong>{{ quizInfo.title }}</strong><span>{{ quizInfo.questionCount }} questions</span></div>
-          <form @submit.prevent="createSession" class="form-stack">
+          <p class="subtle">Saisis la clé d'administration pour choisir un questionnaire et lancer une session.</p>
+          <form v-if="!quizzes" @submit.prevent="unlockAdmin" class="form-stack">
             <label for="admin-key">Clé d'administration</label>
             <input id="admin-key" v-model="adminKey" type="password" autocomplete="off" placeholder="Clé configurée sur le serveur" required minlength="16">
-            <button type="submit" class="btn btn-primary" :disabled="busy">{{ busy ? 'Création…' : 'Créer une session →' }}</button>
+            <button type="submit" class="btn btn-primary" :disabled="busy">{{ busy ? 'Vérification…' : 'Choisir un questionnaire →' }}</button>
+          </form>
+          <form v-else @submit.prevent="createSession" class="form-stack">
+            <label for="quiz-select">Questionnaire</label>
+            <select id="quiz-select" v-model="selectedQuizId" required :disabled="!quizzes.length">
+              <option v-for="q in quizzes" :key="q.id" :value="q.id">{{ q.title }} — {{ q.questionCount }} questions</option>
+            </select>
+            <p v-if="!quizzes.length" class="subtle">Aucun questionnaire : importe un fichier JSON.</p>
+            <button type="submit" class="btn btn-primary" :disabled="busy || !selectedQuizId">{{ busy ? 'Création…' : 'Créer une session →' }}</button>
+            <div class="quiz-actions">
+              <label class="btn btn-secondary file-button">Importer un JSON
+                <input type="file" accept=".json,application/json" @change="importQuiz" :disabled="busy" hidden>
+              </label>
+              <button type="button" class="btn btn-secondary" :disabled="busy || !selectedQuizId" @click="deleteQuiz">Supprimer</button>
+              <button type="button" class="btn btn-secondary" :disabled="busy" @click="lockAdmin">Verrouiller</button>
+            </div>
           </form>
         </section>
         <section class="panel compact-panel">

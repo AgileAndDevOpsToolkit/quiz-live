@@ -23,7 +23,7 @@ body {
     min-height:100vh;
     background:radial-gradient(ellipse 80% 50% at 90% 0%,rgba(120,75,208,.16),transparent),radial-gradient(ellipse 60% 35% at 0% 55%,rgba(44,171,163,.09),transparent),#10182d
 }
-button,input {
+button,input,select {
     font:inherit
 }
 button {
@@ -244,7 +244,7 @@ p {
     font-weight:700;
     color:#d7e3f3
 }
-input {
+input,select {
     border:1px solid #52627f;
     background:#101d33;
     color:#fff;
@@ -255,7 +255,7 @@ input {
     width:100%;
     font-size:1rem
 }
-input:focus {
+input:focus,select:focus {
     border-color:#a993ff;
     box-shadow:0 0 0 3px rgba(149,114,245,.2)
 }
@@ -287,6 +287,17 @@ input::placeholder {
     background:#31415e;
     color:#ecf5ff;
     border:1px solid #4b5d7a
+}
+.quiz-actions {
+    display:grid;
+    grid-template-columns:repeat(3,auto);
+    gap:8px
+}
+.quiz-actions .btn {
+    min-height:42px;
+    padding:10px 12px;
+    font-size:.85rem;
+    cursor:pointer
 }
 .btn-big {
     font-size:1.12rem;
