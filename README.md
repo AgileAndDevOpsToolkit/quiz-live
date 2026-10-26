@@ -210,3 +210,19 @@ Sauvegarde le volume Docker `quizlive_data` si tu veux conserver les résultats.
 ## 8. Licence / bibliothèques tierces
 
 Le code applicatif de ce projet est fourni pour être modifié et auto-hébergé. Vue.js et QRCode.js sont des projets tiers distincts, chargés depuis leur CDN, avec leurs propres licences.
+
+## Déploiement Kubernetes / RKE2 (Ingress NGINX)
+
+L'image sert l'application à la racine `/` et aussi sous `/quiz-live/` (Alias Apache). L'Ingress doit transmettre le chemin tel quel : **ne pas utiliser** `nginx.ingress.kubernetes.io/rewrite-target: /`, qui renvoie `index.html` pour tous les fichiers (erreur « MIME type text/html »).
+
+```yaml
+- path: /quiz-live/
+  pathType: Prefix
+  backend:
+    service:
+      name: quiz-live-service
+      port:
+        number: 80
+```
+
+Accéder à l'application via `/quiz-live/` (avec le slash final).
