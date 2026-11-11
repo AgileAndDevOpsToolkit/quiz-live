@@ -4,7 +4,9 @@
 
 **Stack :** PHP 8.2+ · SQLite (PDO) · Vue.js 3 · QRCode.js · HTML/CSS responsive. **Aucun compte, aucune PWA, aucun WebSocket, aucune base de données serveur** et aucune étape `npm install` ne sont requis.
 
-## 1. Démarrage rapide avec Docker
+## 1. Installation
+
+### Installation rapide avec Docker
 
 Prérequis : Docker et Docker Compose.
 
@@ -23,7 +25,7 @@ Ouvre **http://localhost:8080** sur l'ordinateur de l'animateur. La clé de `.en
 
 Pour arrêter : `docker compose down` (les données restent dans le volume `quizlive_data`). **Ne fais pas** `down -v` si tu souhaites conserver les sessions.
 
-### Reverse proxy Caddy (exemple)
+#### Reverse proxy Caddy (exemple)
 
 Avec un domaine public pointant vers le serveur, configure un reverse proxy vers le port publié :
 
@@ -35,7 +37,7 @@ quiz.agiletoolkit.fr {
 
 Si Caddy est lui-même en conteneur Docker, **`127.0.0.1` désigne alors le conteneur Caddy** : utilise un réseau Docker partagé et le nom du service `quizlive:80`, ou une adresse de l'hôte accessible depuis Caddy. Adapte le nom de domaine et la connectivité à ton infrastructure.
 
-## 2. Installation sans Docker (Apache ou PHP intégré)
+### Installation sans Docker (Apache ou PHP intégré)
 
 Prérequis : PHP 8.2+, extension `pdo_sqlite`, Apache avec `DocumentRoot` pointant **uniquement** sur le dossier `public/`, ou le serveur PHP intégré pour un test local.
 
@@ -58,7 +60,7 @@ Variables d'environnement disponibles :
 
 Sur Docker, l'initialisation SQLite est automatique au démarrage.
 
-## 3. Déroulement d'une partie
+## 2. Déroulement d'une partie
 
 1. **Animateur :** saisit la clé de configuration et clique sur « Créer une session ».
 2. **Accueil des joueurs :** l'application affiche un QR code, un lien et un code à six caractères. Chaque participant entre son pseudo sur son téléphone. Aucun compte et aucune installation nécessaires.
@@ -76,7 +78,7 @@ Exemple : 10 s restantes sur 20 s → **750 points**.
 
 Le chrono continue côté serveur même si un téléphone est ralenti. Un faible délai réseau peut affecter légèrement le score ; pour un jeu d'atelier, ce compromis est généralement acceptable.
 
-## 4. Gérer les questionnaires
+## 3. Gérer les questionnaires
 
 Les questionnaires sont des fichiers JSON dans `QUIZ_DIR` (`/var/www/storage/quizzes` sous Docker, donc **dans le volume** : ils survivent aux mises à jour de l'image). Au premier démarrage, si le dossier est vide, `data/questions.json` y est copié sous le nom `default.json`.
 
@@ -118,7 +120,7 @@ Exemple :
 
 Les modifications sont prises en compte à la prochaine session, sans reconstruire l'image.
 
-## 5. Architecture et sécurité
+## 4. Architecture et sécurité
 
 ```text
 quiz-live/
@@ -173,7 +175,7 @@ curl -fL 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js' -o public/a
 
 Dans `public/index.html`, remplace les attributs `src` des deux balises `<script>` par `assets/vendor/vue.global.prod.js` et `assets/vendor/qrcode.min.js`. Après cette opération, le quiz peut fonctionner sur un réseau local sans Internet, si les téléphones accèdent à ton serveur via IP ou DNS interne. Si tu utilises Docker, reconstruis l'image après ces modifications.
 
-## 6. Tester
+### 5. Tester
 
 Dans le conteneur (où `pdo_sqlite` est installé) :
 
@@ -197,7 +199,7 @@ QUIZ_BASE_URL=http://127.0.0.1:8080 APP_ADMIN_KEY="$(grep '^APP_ADMIN_KEY=' .env
 
 Ce test valide les écritures concurrentes et le classement. Il ne remplace pas une **répétition réelle avec les smartphones** sur ton matériel/réseau. Le polling représente environ 50 lectures d'état par seconde, et les écritures sont transactionnelles.
 
-## 7. Maintenance
+## 6. Maintenance
 
 Purger les sessions inactives depuis plus de 30 jours :
 
@@ -207,7 +209,7 @@ docker compose exec quizlive php bin/purge-sessions.php 30
 
 Sauvegarde le volume Docker `quizlive_data` si tu veux conserver les résultats. Le fichier SQLite peut contenir des pseudos et des réponses : traite-le comme une donnée personnelle à protéger, avec une politique de conservation adaptée.
 
-## 8. Licence / bibliothèques tierces
+## 7. Licence / bibliothèques tierces
 
 Le code applicatif de ce projet est fourni pour être modifié et auto-hébergé. Vue.js et QRCode.js sont des projets tiers distincts, chargés depuis leur CDN, avec leurs propres licences.
 
