@@ -1,1 +1,3 @@
 - A chaque mise à jour du code il faut écrire à la fin de la conversation un commentaire de commit court qui décrit la mise à jour.
+
+- A chaque nouvelle séance de codage, ajoute un fichier dans docs/prompts. Préfixe-le par le numéro suivant en fonction des fichiers déjà existants. Mets un nom pertinent par rapport à la première feature développée dans la séance de codage et écris dans le fichier le texte du prompt que j'ai écrit pour te faire développer la feature. Le prompt doit être sous fomre de bloc de code. A chaque nouvelle demande de feature dans la même séance, ajoute un nouveau bloc de code avec le promt exact que j'ai demandé
